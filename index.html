@@ -57,6 +57,9 @@
     text-shadow: 0 2px 12px rgba(0,0,0,.6); pointer-events: none; transition: opacity .6s; text-align: center; }
   .hint.hidden { opacity: 0; }
 
+  .tip { position: fixed; z-index: 15; pointer-events: none; transform: translate(14px, -130%); padding: 6px 10px; border-radius: 6px;
+    background: var(--ink); color: #15110d; font-size: 12px; white-space: nowrap; opacity: 0; transition: opacity .15s; }
+  .tip.show { opacity: 1; }
   .loading { position: fixed; inset: 0; display: grid; place-items: center; background: #0e0b09; z-index: 30; transition: opacity .8s; }
   .loading.done { opacity: 0; pointer-events: none; }
   .loading span { font: 600 34px Caveat, cursive; color: var(--soft); }
@@ -95,6 +98,7 @@
   <button id="close" class="opt" title="Close the notebook">close</button>
 </div>
 
+<div class="tip" id="tip" role="tooltip"></div>
 <div class="loading" id="loading"><span>opening the notebook…</span></div>
 <div class="nogl" id="nogl"><div>
   <p style="font:600 36px Caveat,cursive">This 3D notebook needs WebGL.</p>

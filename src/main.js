@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { buildDesk } from './scene/desk.js';
+import { buildProps } from './scene/props.js';
 import { Notebook, W, H } from './scene/notebook.js';
 import { buildPageList, loadFonts, PW, PH } from './pages/render.js';
 import { buildA11y } from './ui/a11y.js';
@@ -41,6 +42,7 @@ async function start() {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.1, 60);
   buildDesk(scene, renderer, { quality });
+  const props = buildProps(scene, renderer);
 
   const clothNormal = new THREE.TextureLoader().load(import.meta.env.BASE_URL + 'assets/cloth_nor_1k.jpg');
   const pages = buildPageList();
@@ -61,7 +63,7 @@ async function start() {
       elev = 82;
     } else {
       if (isSmall()) { w = W + 0.5; h = H + 0.9; tx = rig.focus * W / 2; }
-      else { w = 2 * W + 0.9; h = H + 1.0; }
+      else { w = 2 * W + 2.6; h = H + 1.5; }
       elev = 64; tz = 0.25;
     }
     const d = Math.max(h / (2 * tan), w / (2 * tan * aspect)) * (mode === 'read' ? 1.0 : 1.04);
@@ -120,11 +122,12 @@ async function start() {
   const ray = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
   const deskPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.2);
+  const pickTargets = [...book.raycastTargets, ...props.targets];
   function pick(ev) {
     const r = canvas.getBoundingClientRect();
     ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(ndc, camera);
-    const hits = ray.intersectObjects(book.raycastTargets, false);
+    const hits = ray.intersectObjects(pickTargets, false);
     return hits[0] || null;
   }
   function localX(ev) {
@@ -138,6 +141,7 @@ async function start() {
   function classify(hit) {
     if (!hit) return null;
     const o = hit.object, s = book.spread;
+    if (o.userData.prop) return { kind: 'prop', prop: o.userData.prop };
     if (o.userData.tab) return { kind: 'tab', page: o.userData.tab.page };
     if (o.userData.cover) {
       if (s === 0) return { kind: 'cover' };
@@ -217,6 +221,7 @@ async function start() {
     const info = d.info;
     if (!info) return;
     dismissHint();
+    if (info.kind === 'prop') { follow(info.prop.href); return; }
     if (info.kind === 'cover') { book.goToSpread(1); return; }
     if (info.kind === 'tab') { follow('#page:' + info.page); return; }
     if (info.kind === 'page') {
@@ -231,15 +236,20 @@ async function start() {
 
   let hoverQueued = null;
   function hover(ev) { hoverQueued = ev; }
+  const tip = $('tip');
   function doHover() {
     if (!hoverQueued) return;
-    const info = classify(pick(hoverQueued)); hoverQueued = null;
-    let cur = '';
+    const ev = hoverQueued, info = classify(pick(ev)); hoverQueued = null;
+    let cur = '', label = '';
     if (info) {
-      if (info.kind === 'cover' || info.kind === 'tab' || hotspotAt(info)) cur = 'pointer';
+      if (info.kind === 'prop') { cur = 'pointer'; label = info.prop.label; }
+      else if (info.kind === 'cover' || info.kind === 'tab' || hotspotAt(info)) cur = 'pointer';
       else if (info.kind === 'page') cur = info.leaf ? 'grab' : 'pointer';
     }
+    props.setHover(info && info.kind === 'prop' ? info.prop.root : null);
     canvas.style.cursor = cur;
+    tip.textContent = label; tip.classList.toggle('show', !!label);
+    if (label) { tip.style.left = ev.clientX + 'px'; tip.style.top = ev.clientY + 'px'; }
   }
   function dismissHint() { hintDismissed = true; $('hint').classList.add('hidden'); }
 
@@ -274,6 +284,7 @@ async function start() {
   function frame() {
     const dt = Math.min(clock.getDelta(), 1 / 20);
     book.tick(reduceMotion ? 10 : dt);
+    props.tick(dt, clock.elapsedTime);
     const k = 1 - Math.exp(-dt * (reduceMotion ? 60 : 3.2));
     rig.curPos.lerp(rig.pos, k); rig.curTgt.lerp(rig.tgt, k);
     // gentle parallax (none while reading)
@@ -288,5 +299,5 @@ async function start() {
   requestAnimationFrame(() => $('loading').classList.add('done'));
 
   // debug handle for development
-  window.__nb = { book, setMode, rig, renderer, scene, camera };
+  window.__nb = { book, props, setMode, rig, renderer, scene, camera };
 }
